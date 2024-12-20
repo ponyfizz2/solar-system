@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>    
+    <title>Interactive 3D Solar System</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 0.5em 1em;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        #ui-panel h2 {
+            margin-top: 0;
+        }
+
+        #ui-panel p {
+            margin: 0.5em 0;
+        }
+    </style>
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <!-- pythreejs support -->
+    <!-- If needed, you might have to install and load pythreejs via PyPI packages in PyScript -->
+</head>
+<body>
+
+<div id="ui-panel">
+    <h2>3D Solar System</h2>
+    <p>Scroll to zoom, click and drag to rotate/tilt.</p>
+</div>
+
+<py-config>
+    packages = [
+        "pythreejs"
+    ]
+</py-config>
+
+<py-script>
+from pythreejs import (
+    PerspectiveCamera, Scene, AmbientLight, DirectionalLight,
+    Mesh, MeshBasicMaterial, SphereGeometry,
+    OrbitControls, Renderer, TextureLoader, Group
+)
+import math
+import asyncio
+from js import document
+
+# Constants (scaled)
+# 1 unit = 1 million kilometers for distance
+# Planet scale factor to make them visible
+DISTANCE_SCALE = 1e-6
+SIZE_SCALE = 1e-5
+
+# Approximate values (in km)
+SUN_RADIUS = 695700
+EARTH_RADIUS = 6371
+EARTH_DISTANCE = 149600000  # from the sun
+
+# Example: We'll implement only a few planets for demonstration
+planets_data = [
+    {
+        "name": "Mercury",
+        "radius": 2439.7,
+        "distance": 57910000,
+        "color": "#bebebe",
+        "orbital_period": 88  # days
+    },
+    {
+        "name": "Venus",
+        "radius": 6051.8,
+        "distance": 108200000,
+        "color": "#d9c67b",
+        "orbital_period": 225
+    },
+    {
+        "name": "Earth",
+        "radius": EARTH_RADIUS,
+        "distance": EARTH_DISTANCE,
+        "color": "#4f9ac9",
+        "orbital_period": 365
+    },
+    {
+        "name": "Mars",
+        "radius": 3389.5,
+        "distance": 227900000,
+        "color": "#c1440e",
+        "orbital_period": 687
+    }
+]
+
+# Create the scene
+scene = Scene()
+
+# Camera
+camera = PerspectiveCamera(fov=45, aspect=1.5, near=0.1, far=10000)
+camera.position.z = 50
+
+# Lighting
+ambient_light = AmbientLight(color='#ffffff', intensity=0.4)
+scene.add(ambient_light)
+
+dir_light = DirectionalLight(color='#ffffff', intensity=0.8)
+dir_light.position.set(10, 10, 10)
+scene.add(dir_light)
+
+# Sun
+sun_geometry = SphereGeometry(SUN_RADIUS * SIZE_SCALE, 32, 32)
+sun_material = MeshBasicMaterial(color='#ffff00')
+sun = Mesh(sun_geometry, sun_material)
+scene.add(sun)
+
+# Planets
+planets = []
+for p in planets_data:
+    geom = SphereGeometry(p["radius"] * SIZE_SCALE, 24, 24)
+    mat = MeshBasicMaterial(color=p["color"])
+    planet_mesh = Mesh(geom, mat)
+    # Start planets along the x-axis
+    planet_mesh.position.x = p["distance"] * DISTANCE_SCALE
+    scene.add(planet_mesh)
+    # Store orbital info
+    p["mesh"] = planet_mesh
+    planets.append(p)
+
+# Controls
+controls = OrbitControls(controlling=camera)
+controls.enableDamping = True
+controls.dampingFactor = 0.05
+
+# Renderer
+renderer = Renderer(camera=camera, scene=scene, alpha=True, antialias=True)
+renderer.width = 800
+renderer.height = 600
+
+display(renderer)
+
+# Animation
+async def animate():
+    while True:
+        # Simplified orbital motion: rotate around the sun
+        # angle per frame ~ (2*pi/orbital_period_per_frames)
+        # We'll just pick a frame rate and assume each iteration is a 'time step'
+        for p in planets:
+            # We'll assume one iteration ~ one day for simplicity
+            angle = (2*math.pi / p["orbital_period"])
+            # Current angle based on planet's current position
+            x = p["mesh"].position.x
+            y = p["mesh"].position.y
+            dist = p["distance"] * DISTANCE_SCALE
+            current_angle = math.atan2(y, x)
+            new_angle = current_angle + angle * 0.01  # slow it down
+            p["mesh"].position.x = dist * math.cos(new_angle)
+            p["mesh"].position.y = dist * math.sin(new_angle)
+
+        controls.update()
+        renderer.render(scene, camera)
+        await asyncio.sleep(0.016)  # ~60 FPS
+
+asyncio.ensure_future(animate())
+</py-script>
+
+</body>
+</html>
